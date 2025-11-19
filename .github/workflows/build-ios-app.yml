@@ -1,0 +1,65 @@
+name: Build iOS App Installer
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS IPA
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Show Xcode version
+      run: xcodebuild -version
+      
+    - name: Install Carthage
+      run: brew install carthage
+      
+    - name: Bootstrap Carthage dependencies
+      run: carthage bootstrap --platform iOS --use-xcframeworks || carthage bootstrap --platform iOS
+      continue-on-error: false
+      
+    - name: List available schemes
+      run: xcodebuild -list -project "Sample Apps.xcodeproj"
+      
+    - name: Build Sample iOS App
+      run: |
+        xcodebuild clean build \
+          -project "Sample Apps.xcodeproj" \
+          -target "Sample iOS App" \
+          -sdk iphoneos \
+          -configuration Release \
+          SYMROOT="$RUNNER_TEMP/build" \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO
+          
+    - name: Export IPA
+      run: |
+        mkdir -p "$RUNNER_TEMP/Payload"
+        cp -r "$RUNNER_TEMP/build/Release-iphoneos/Sample iOS App.app" "$RUNNER_TEMP/Payload/"
+        cd "$RUNNER_TEMP"
+        zip -r "SampleiOSApp.ipa" "Payload"
+        
+    - name: Upload IPA artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SampleiOSApp-IPA
+        path: ${{ runner.temp }}/SampleiOSApp.ipa
+        retention-days: 30
+        
+    - name: Show build info
+      run: |
+        echo "✅ iOS App built successfully!"
+        echo "📦 IPA file is available as an artifact in the Actions tab"
+        echo "📱 Download the IPA and install it on your iPhone using:"
+        echo "   - Apple Configurator (recommended)"
+        echo "   - Xcode Devices window"
+        echo "   - Or sign it with your developer certificate"
